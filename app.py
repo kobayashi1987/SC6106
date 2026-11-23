@@ -18,6 +18,12 @@ def main():
 def transferMoney():
     return(render_template("transferMoney.html"))
 
+
+@app.route("/storeMoney", methods=["GET","POST"])
+def storeMoney():
+    return(render_template("storeMoney.html"))
+
+
 if __name__ == "__main__":
     app.run()
 
