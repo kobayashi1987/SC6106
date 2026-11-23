@@ -1,0 +1,400 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <title>Invoice Tracker</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h2>Invoice Tracker</h2>
+
+        <h3>Invoice Information</h3>
+
+        <p id="view_amount">Invoice Amount: -</p>
+        <p id="view_status">Payment Status: -</p>
+
+        <button class="btn" onclick="viewInvoice()">
+            View Invoice
+        </button>
+
+        <h3>Invoice Management</h3>
+
+        <button class="btn" onclick="payInvoice()">
+            Pay Invoice
+        </button>
+
+        <button class="btn" onclick="resetInvoice()">
+            Reset Invoice
+        </button>
+
+        <form action="/main" method="post">
+            <input type="submit" value="Main">
+        </form>
+
+        <p id="message"></p>
+
+    </div>
+
+
+    <!-- Web3.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.5.2/dist/web3.min.js"></script>
+
+
+    <script>
+
+        // =====================================
+        // 1. Smart Contract Configuration
+        // =====================================
+
+        // Replace with your deployed InvoiceTracker address
+        const contractAddress = "0x4129a1a0ee590964c2f4ea91afdc68c9bfe83d30";
+
+        const contractABI = [
+                                {
+                                    "inputs": [],
+                                    "name": "invoiceAmount",
+                                    "outputs": [
+                                        {
+                                            "internalType": "uint256",
+                                            "name": "",
+                                            "type": "uint256"
+                                        }
+                                    ],
+                                    "stateMutability": "view",
+                                    "type": "function"
+                                },
+                                {
+                                    "inputs": [],
+                                    "name": "isPaid",
+                                    "outputs": [
+                                        {
+                                            "internalType": "bool",
+                                            "name": "",
+                                            "type": "bool"
+                                        }
+                                    ],
+                                    "stateMutability": "view",
+                                    "type": "function"
+                                },
+                                {
+                                    "inputs": [],
+                                    "name": "payInvoice",
+                                    "outputs": [],
+                                    "stateMutability": "nonpayable",
+                                    "type": "function"
+                                },
+                                {
+                                    "inputs": [],
+                                    "name": "resetInvoice",
+                                    "outputs": [],
+                                    "stateMutability": "nonpayable",
+                                    "type": "function"
+                                }
+                            ]
+
+
+        // =====================================
+        // 2. Initialize Web3
+        // =====================================
+
+        let web3;
+        let contract;
+
+        if (window.ethereum) {
+
+            web3 = new Web3(window.ethereum);
+
+            if (web3.utils.isAddress(contractAddress)) {
+                contract = new web3.eth.Contract(
+                    contractABI,
+                    contractAddress
+                );
+            }
+
+        } else {
+            console.error("MetaMask is not installed.");
+        }
+
+
+        // =====================================
+        // 3. Display Message
+        // =====================================
+
+        function showMessage(message) {
+
+            document.getElementById("message").innerText =
+                message;
+
+        }
+
+
+        // =====================================
+        // 4. Check Contract Connection
+        // =====================================
+
+        async function checkContract() {
+
+            if (!web3) {
+                throw new Error(
+                    "MetaMask is not installed."
+                );
+            }
+
+            if (!contract) {
+                throw new Error(
+                    "Invalid contract address. " +
+                    "Please update contractAddress."
+                );
+            }
+
+            // Check if contract exists on current network
+            const code = await web3.eth.getCode(contractAddress);
+
+            if (!code || code === "0x" || code === "0x0") {
+                throw new Error(
+                    "No contract found at this address " +
+                    "on the connected network."
+                );
+            }
+
+        }
+
+
+        // =====================================
+        // 5. View Invoice Information
+        // =====================================
+
+        async function viewInvoice() {
+
+            try {
+
+                await checkContract();
+
+                // Retrieve invoice amount
+                const amount = await contract.methods
+                    .invoiceAmount()
+                    .call();
+
+                // Retrieve payment status
+                const paid = await contract.methods
+                    .isPaid()
+                    .call();
+
+                console.log("Invoice Amount:", amount);
+                console.log("Payment Status:", paid);
+
+                // Display invoice amount
+                document.getElementById("view_amount").innerText =
+                    "Invoice Amount: " + amount;
+
+                // Display payment status
+                document.getElementById("view_status").innerText =
+                    "Payment Status: " +
+                    (paid ? "Paid" : "Unpaid");
+
+                return paid;
+
+            } catch (error) {
+
+                console.error("View Invoice Error:", error);
+
+                showMessage(
+                    "Error: " + error.message
+                );
+
+                throw error;
+            }
+
+        }
+
+
+        // =====================================
+        // 6. Pay Invoice
+        // =====================================
+
+        async function payInvoice() {
+
+            try {
+
+                await checkContract();
+
+                // Request MetaMask accounts
+                const accounts = await web3.eth.requestAccounts();
+
+                console.log("Account:", accounts[0]);
+
+                showMessage(
+                    "Waiting for MetaMask transaction confirmation..."
+                );
+
+                // Submit payment transaction
+                const receipt = await contract.methods
+                    .payInvoice()
+                    .send({
+                        from: accounts[0]
+                    });
+
+                console.log(
+                    "Payment Transaction Receipt:",
+                    receipt
+                );
+
+                // Verify transaction success
+                if (
+                    receipt.status === false ||
+                    receipt.status === 0 ||
+                    receipt.status === "0x0"
+                ) {
+                    throw new Error(
+                        "Payment transaction failed."
+                    );
+                }
+
+                // Refresh blockchain state
+                await viewInvoice();
+
+                showMessage(
+                    "Invoice marked as PAID successfully."
+                );
+
+            } catch (error) {
+
+                console.error("Payment Error:", error);
+
+                showMessage(
+                    "Payment Error: " + error.message
+                );
+            }
+
+        }
+
+
+        // =====================================
+        // 7. Reset Invoice
+        // =====================================
+
+        async function resetInvoice() {
+
+            try {
+
+                await checkContract();
+
+                // Request MetaMask accounts
+                const accounts = await web3.eth.requestAccounts();
+
+                console.log("Account:", accounts[0]);
+
+                showMessage(
+                    "Waiting for MetaMask reset confirmation..."
+                );
+
+                // Submit reset transaction
+                const receipt = await contract.methods
+                    .resetInvoice()
+                    .send({
+                        from: accounts[0]
+                    });
+
+                console.log(
+                    "Reset Transaction Receipt:",
+                    receipt
+                );
+
+                // Verify transaction success
+                if (
+                    receipt.status === false ||
+                    receipt.status === 0 ||
+                    receipt.status === "0x0"
+                ) {
+                    throw new Error(
+                        "Reset transaction failed."
+                    );
+                }
+
+                // Read updated payment status
+                const paid = await contract.methods
+                    .isPaid()
+                    .call();
+
+                console.log(
+                    "Payment Status After Reset:",
+                    paid
+                );
+
+                // Update displayed information
+                await viewInvoice();
+
+                if (paid === false) {
+
+                    showMessage(
+                        "Invoice reset successfully. " +
+                        "Payment status is now UNPAID."
+                    );
+
+                } else {
+
+                    showMessage(
+                        "Reset transaction confirmed, " +
+                        "but payment status is still PAID. " +
+                        "Please verify the deployed contract."
+                    );
+
+                }
+
+            } catch (error) {
+
+                console.error("Reset Error:", error);
+
+                showMessage(
+                    "Reset Error: " + error.message
+                );
+
+            }
+
+        }
+
+
+        // =====================================
+        // 8. Network Change Detection
+        // =====================================
+
+        if (window.ethereum) {
+
+            window.ethereum.on("chainChanged", function() {
+
+                // Refresh provider and contract connection
+                window.location.reload();
+
+            });
+
+        }
+
+
+        // =====================================
+        // 9. Load Invoice on Page Opening
+        // =====================================
+
+        window.addEventListener("load", function() {
+
+            viewInvoice().catch(function(error) {
+                console.error("Initial loading:", error);
+            });
+
+        });
+
+    </script>
+
+</body>
+
+</html>
